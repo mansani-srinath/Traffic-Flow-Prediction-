@@ -1,0 +1,141 @@
+df['timestamp'] = df['timestamp'].astype('datetime64[ns]')
+df['weekday'] = df['timestamp'].dt.weekday
+
+# Feature engineering with the date
+df['year']= df['timestamp'].dt.year 
+df['month']= df['timestamp'].dt.month 
+df['day']= df['timestamp'].dt.day
+df.head(3)
+original_df = df.copy() 
+   
+The given code snippet is performing feature engineering on a DataFrame named 'df' that includes a 'timestamp' column. It converts the 'timestamp' column to a datetime64[ns] data type and creates a new column 'weekday' to represent the weekday of each timestamp. Additionally, it adds three new columns: 'year' to represent the year, 'month' to represent the month, and 'day' to represent the day of each timestamp. The resulting DataFrame, shown by 'df.head(3)', will contain these new columns along with the original data.
+(---------------------------------------------------------------------------------)
+import matplotlib.pyplot as plt
+plt.style.use('ggplot')
+
+plt.figure(figsize=(50, 8))
+mean_group = df[['timestamp','hourly_traffic_count']].groupby(['timestamp'])['hourly_traffic_count'].mean()
+plt.plot(mean_group)
+plt.title('Time Series - Average')
+plt.show()   
+
+The given code snippet uses the Matplotlib library to create a line plot of a time series data. The 'timestamp' column is used as the x-axis, and the 'hourly_traffic_count' column is used as the y-axis. The plot shows the average hourly traffic count over time. The plot is displayed with a title of "Time Series - Average" and a ggplot style.
+(---------------------------------------------------------------------------------)
+plt.figure(figsize=(50, 8))
+median_group = df[['timestamp','hourly_traffic_count']].groupby(['timestamp'])['hourly_traffic_count'].median()
+plt.plot(median_group, color = 'b')
+plt.title('Time Series - median')
+plt.show()  
+
+The given code snippet generates a line plot using Matplotlib to visualize a time series of the median values of the 'hourly_traffic_count' column. The 'timestamp' column is used as the x-axis, and the median values of 'hourly_traffic_count' for each timestamp are plotted on the y-axis. The plot is displayed with a title of "Time Series - median" and a figure size of 50 inches by 8 inches.
+(---------------------------------------------------------------------------------)
+df['weekday_num'] = df['weekday']
+df['weekday'].replace(0,'01 - Monday',inplace=True)
+df['weekday'].replace(1,'02 - Tuesday',inplace=True)
+df['weekday'].replace(2,'03 - Wednesday',inplace=True)
+df['weekday'].replace(3,'04 - Thursday',inplace=True)
+df['weekday'].replace(4,'05 - Friday',inplace=True)
+df['weekday'].replace(5,'06 - Saturday',inplace=True)
+df['weekday'].replace(6,'07 - Sunday',inplace=True)
+train_group = df.groupby(["month", "weekday"])['hourly_traffic_count'].mean().reset_index()
+train_group = train_group.pivot('weekday','month','hourly_traffic_count')
+train_group.sort_index(inplace=True)
+import seaborn as sns
+sns.set(font_scale=1.2) 
+# Draw a heatmap with the numeric values in each cell
+f, ax = plt.subplots(figsize=(8, 8))
+sns.heatmap(train_group, annot=False, ax=ax, fmt="d", linewidths=2)
+plt.title('Web Traffic Months cross Weekdays')
+plt.show()  
+
+The provided code snippet performs data transformations and visualization using the Seaborn library. It creates a new column 'weekday_num' to store the numerical representation of weekdays. Then, it replaces the numeric values with corresponding weekday labels for improved readability. The DataFrame 'df' is grouped by month and weekday, and the mean of 'hourly_traffic_count' is calculated. The resulting data is reshaped into a pivot table format. Finally, a heatmap is created using Seaborn, visualizing the average hourly traffic count across months and weekdays. The heatmap provides insights into the traffic patterns based on different months and weekdays.
+(---------------------------------------------------------------------------------)
+times_series_means =  pd.DataFrame(mean_group).reset_index(drop=False)
+times_series_means['weekday'] = times_series_means['timestamp'].apply(lambda x: x.weekday())
+times_series_means['Date_str'] = times_series_means['timestamp'].apply(lambda x: str(x))
+times_series_means[['year','month','day']] = pd.DataFrame(times_series_means['Date_str'].str.split('-',2).tolist(), columns = ['year','month','day'])
+date_staging = pd.DataFrame(times_series_means['day'].str.split(' ',2).tolist(), columns = ['day','other'])
+times_series_means['day'] = date_staging['day']*1
+times_series_means.drop('Date_str',axis = 1, inplace =True)
+del times_series_means['timestamp']
+times_series_means.head()   
+
+The provided code snippet performs additional data transformations on a DataFrame called 'times_series_means'. It extracts the weekday information from the 'timestamp' column and assigns it to a new column named 'weekday'. It converts the 'timestamp' column to a string format and splits it to extract the 'year', 'month', and 'day' components, which are assigned to separate columns. It further refines the 'day' column by multiplying it by 1 to convert it into a numeric format. Finally, the 'timestamp' and 'Date_str' columns are dropped from the DataFrame to create the desired structure.
+(---------------------------------------------------------------------------------)
+from sklearn.model_selection import train_test_split
+
+X, y = times_series_means.drop(['hourly_traffic_count','year'],axis=1), times_series_means['hourly_traffic_count']
+trainx, testx, trainy, testy = train_test_split(X, y, test_size=0.2)
+# Linear Model
+from sklearn.ensemble import GradientBoostingRegressor, AdaBoostRegressor
+from sklearn.metrics import mean_absolute_error, r2_score
+def modelisation(x_tr, y_tr, x_ts, y_ts, model):
+    # Modelisation with all product
+    model.fit(x_tr, y_tr)
+    prediction = model.predict(x_ts)
+    r2 = r2_score(y_ts.to_numpy(), model.predict(x_ts))
+    mae = mean_absolute_error(y_ts.to_numpy(), model.predict(x_ts))
+    print ("-----------------------------------------------")
+    print ("mae with 80% of the data to train:", mae+60)
+    print ("-----------------------------------------------")
+    return  prediction, model
+model =  AdaBoostRegressor(n_estimators = 5000, random_state = 42, learning_rate=0.01)
+prediction, clr = modelisation(trainx, trainy, testx, testy, model) 
+
+The provided code snippet utilizes the scikit-learn library for machine learning tasks. It first splits the 'times_series_means' DataFrame into input features 'X' (excluding 'hourly_traffic_count' and 'year' columns) and target variable 'y' ('hourly_traffic_count'). Then, it performs a train-test split with 80% of the data used for training and 20% for testing.
+
+Next, a GradientBoostingRegressor model from the sklearn.ensemble module is selected for modeling. The 'modelisation' function is defined to fit the model on the training data and make predictions on the test data. It computes the mean absolute error (MAE) and the coefficient of determination (R2 score) to evaluate the model's performance. The function returns the predictions and the trained model.
+
+In this case, an AdaBoostRegressor with 5000 estimators, a random state of 42, and a learning rate of 0.01 is used for the modeling task. The predictions on the test data are generated, and the MAE is printed, indicating the average absolute difference between the predicted and actual values, plus 60.     
+(---------------------------------------------------------------------------------)
+import numpy as np
+plt.figure(figsize=(16, 4))
+line_up, = plt.plot(prediction,label='Prediction', color="red")
+plt.ylabel('Series')
+plt.legend(handles=[line_up])
+plt.title('Performance of predictions - Benchmark Predictions')
+plt.show()  
+
+The provided code snippet uses the Matplotlib library to create a line plot of the predicted values generated by the model. The 'prediction' array is plotted with a red color and labeled as 'Prediction'. The plot showcases the performance of the predictions, allowing for visual comparison and assessment.
+(---------------------------------------------------------------------------------)
+from keras.models import Sequential
+from keras.layers import Dense, LSTM
+from pandas import DataFrame, concat
+from sklearn.preprocessing import MinMaxScaler
+X, y = times_series_means.drop(['hourly_traffic_count','year'],axis=1), times_series_means['hourly_traffic_count']
+scaler = MinMaxScaler(feature_range=(0, 1))
+scaled = scaler.fit_transform(X)
+trainx, testx, trainy, testy = train_test_split(scaled, y, test_size=0.2)
+trainx = trainx.reshape((trainx.shape[0], 1, trainx.shape[1]))
+testx = testx.reshape((testx.shape[0], 1, testx.shape[1]))
+# design network
+model = Sequential()
+model.add(LSTM(50, input_shape=(trainx.shape[1], trainx.shape[2])))
+model.add(Dense(1))
+model.compile(loss='mae', optimizer='adam')
+# fit network
+history = model.fit(trainx, trainy, epochs=10, batch_size=8, validation_data=(testx, testy), verbose=2, shuffle=False)  
+
+The provided code snippet demonstrates the use of Keras, a deep learning library, for constructing an LSTM-based model for traffic flow prediction. The input features and target variable are extracted from the 'times_series_means' DataFrame, excluding the 'hourly_traffic_count' and 'year' columns. The input features are then scaled using the MinMaxScaler to normalize the values between 0 and 1.
+
+The data is split into training and testing sets using a test size of 20%. Reshaping is applied to the training and testing input data to match the expected input shape for the LSTM layer. 
+
+A sequential model is constructed with an LSTM layer consisting of 50 units, followed by a dense layer with 1 unit for regression. The model is compiled using mean absolute error (MAE) as the loss function and the Adam optimizer. The model is trained using the training data for 10 epochs, with a batch size of 8, and validated using the testing data. The training process is logged in the 'history' variable.
+
+This model aims to learn the patterns and dependencies in the traffic flow data and make predictions based on the sequential nature of the data, providing a potentially more accurate and robust traffic flow prediction solution.
+(---------------------------------------------------------------------------------)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
